@@ -127,6 +127,7 @@ static void proc_p1(void* arg) {
         serial_put_u32(p ? p->pid : 0);
         serial_puts("\n");
         busy_wait(200000000);
+        process_yield();  // Yield to other processes
     }
 }
 
@@ -141,6 +142,7 @@ static void proc_p2(void* arg) {
         serial_put_u32(p ? p->pid : 0);
         serial_puts("\n");
         busy_wait(200000000);
+        process_yield();  // Yield to other processes
     }
 }
 
@@ -155,6 +157,7 @@ static void proc_p3(void* arg) {
         serial_put_u32(p ? p->pid : 0);
         serial_puts("\n");
         busy_wait(200000000);
+        process_yield();  // Yield to other processes
     }
 }
 
@@ -169,6 +172,7 @@ static void proc_p4(void* arg) {
         serial_put_u32(p ? p->pid : 0);
         serial_puts("\n");
         busy_wait(200000000);
+        process_yield();  // Yield to other processes
     }
 }
 
@@ -183,6 +187,7 @@ static void proc_p5(void* arg) {
         serial_put_u32(p ? p->pid : 0);
         serial_puts("\n");
         busy_wait(200000000);
+        process_yield();  // Yield to other processes
     }
 }
 
@@ -246,31 +251,34 @@ static void cmd_run(uint32_t pid) {
 }
 
 static void cmd_runq(void) {
-    uint32_t ran = 0;
-    while (1) {
-        uint32_t pid = 0;
-        int32_t rc = process_readyq_dequeue(&pid);
-        if (rc < 0) {
-            break;
-        }
-
-        process_t* p = process_get(pid);
-        if (!p || !p->entry) {
-            continue;
-        }
-
-        // Simulated "dispatch": RUNNING -> call entry -> TERMINATED
-        if (process_set_current(pid) < 0) {
-            continue;
-        }
-        p->entry(p->arg);
-        process_terminate(pid, 0);
-        ran++;
+    // Get the first ready process and start it
+    // Processes will cooperatively yield to each other via process_yield()
+    uint32_t pid = 0;
+    int32_t rc = process_readyq_dequeue(&pid);
+    
+    if (rc < 0) {
+        serial_puts("runq: no ready processes\n");
+        return;
     }
-
-    serial_puts("runq: executed ");
-    serial_put_u32(ran);
-    serial_puts(" process(es)\n");
+    
+    // Re-enqueue for round-robin
+    process_readyq_enqueue(pid);
+    
+    serial_puts("runq: starting with pid=");
+    serial_put_u32(pid);
+    serial_puts("\n");
+    
+    serial_puts("runq: about to call scheduler_context_switch\n");
+    
+    // Start the first process - it will yield to others
+    // When all processes complete, control returns here
+    int32_t next_pid = scheduler_context_switch();
+    
+    serial_puts("runq: returned from scheduler, next_pid=");
+    serial_put_u32((uint32_t)next_pid);
+    serial_puts("\n");
+    serial_puts("runq: all processes completed\n");
+    (void)next_pid;
 }
 
 static void cmd_sched_stats(void) {
@@ -312,11 +320,25 @@ void kmain(void) {
     serial_puts("Scheduler initialized (Round-Robin)\n\n");
 
     // Hardcoded ready processes for quick testing
+    serial_puts("Creating process p1...\n");
     process_create("p1", proc_p1, NULL, 0);
+    serial_puts("Created p1\n");
+    
+    serial_puts("Creating process p2...\n");
     process_create("p2", proc_p2, NULL, 0);
+    serial_puts("Created p2\n");
+    
+    serial_puts("Creating process p3...\n");
     process_create("p3", proc_p3, NULL, 0);
+    serial_puts("Created p3\n");
+    
+    serial_puts("Creating process p4...\n");
     process_create("p4", proc_p4, NULL, 0);
+    serial_puts("Created p4\n");
+    
+    serial_puts("Creating process p5...\n");
     process_create("p5", proc_p5, NULL, 0);
+    serial_puts("Created p5\n\n");
 
     /* ================= HEAP TESTS ================= */
     serial_puts("=== HEAP TESTS ===\n");

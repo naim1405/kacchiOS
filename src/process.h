@@ -21,6 +21,15 @@ typedef enum {
 
 typedef void (*process_entry_t)(void* arg);
 
+// CPU context for context switching (i386 registers)
+typedef struct {
+    uint32_t edi;
+    uint32_t esi;
+    uint32_t ebx;
+    uint32_t ebp;
+    uint32_t eip;  // Return address (where to resume)
+} cpu_context_t;
+
 typedef struct ipc_message {
     uint32_t from_pid;
     uint32_t length;
@@ -40,6 +49,9 @@ typedef struct process {
     void* stack_base;
     uint32_t stack_size;
     void* stack_top;
+
+    // CPU context for context switching - this is the stack pointer
+    void* context;  // Saved stack pointer (ESP)
 
     int32_t exit_code;
 
@@ -69,6 +81,9 @@ process_t* process_at(uint32_t index);
 
 uint32_t process_count(void);
 const char* process_state_str(process_state_t state);
+
+// Cooperative yielding for multitasking
+void process_yield(void);
 
 // Ready queue (FIFO of PIDs)
 // Enqueue is typically done automatically by process_create().
