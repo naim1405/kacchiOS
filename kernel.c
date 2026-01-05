@@ -30,16 +30,6 @@ static void serial_put_u32(uint32_t value) {
     }
 }
 
-static void serial_put_hex32(uint32_t value) {
-    static const char* hex = "0123456789ABCDEF";
-    serial_puts("0x");
-    for (int shift = 28; shift >= 0; shift -= 4) {
-        serial_putc(hex[(value >> shift) & 0xF]);
-    }
-}
-
-static uint32_t g_rng_state = 0xC0FFEE01;
-
 static uint32_t parse_u32(const char* s, uint32_t* out_ok) {
     uint32_t value = 0;
     uint32_t ok = 0;
