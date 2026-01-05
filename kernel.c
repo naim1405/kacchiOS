@@ -201,6 +201,16 @@ static void cmd_run(uint32_t pid) {
         return;
     }
 
+    // If process is terminated, restart it
+    if (p->state == PROCESS_STATE_TERMINATED) {
+        int32_t rc = process_restart(pid);
+        if (rc < 0) {
+            serial_puts("run: failed to restart process\n");
+            return;
+        }
+        serial_puts("run: restarted terminated process\n");
+    }
+
     int32_t rc = process_set_current(pid);
     if (rc < 0) {
         serial_puts("run: cannot set current\n");

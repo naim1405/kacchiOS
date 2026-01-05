@@ -71,6 +71,7 @@ int32_t process_create(const char* name, process_entry_t entry, void* arg, uint3
 int32_t process_set_state(uint32_t pid, process_state_t new_state);
 int32_t process_set_current(uint32_t pid);
 int32_t process_terminate(uint32_t pid, int32_t exit_code);
+int32_t process_restart(uint32_t pid);  // Restart a terminated process
 
 process_t* process_get(uint32_t pid);
 process_t* process_current(void);

@@ -338,6 +338,52 @@ int32_t process_terminate(uint32_t pid, int32_t exit_code) {
     return 0;
 }
 
+int32_t process_restart(uint32_t pid) {
+    if (pid == 0) {
+        return -2; // cannot restart kernel process
+    }
+
+    process_t* p = process_get(pid);
+    if (!p) {
+        return -1;
+    }
+
+    if (p->state != PROCESS_STATE_TERMINATED) {
+        return -3; // only restart terminated processes
+    }
+
+    if (!p->entry) {
+        return -4; // no entry function
+    }
+
+    // Allocate new stack
+    uint32_t stack_size = p->stack_size > 0 ? p->stack_size : PROCESS_DEFAULT_STACK_SIZE;
+    void* stack = kmalloc(stack_size);
+    if (!stack) {
+        return -5; // out of memory
+    }
+
+    p->stack_base = stack;
+    p->stack_size = stack_size;
+    p->stack_top = (void*)((uint32_t)stack + stack_size);
+
+    // Initialize stack for context switching (same as process_create)
+    volatile uint32_t* stack_ptr = (volatile uint32_t*)p->stack_top;
+    
+    --stack_ptr; *((uint32_t*)stack_ptr) = (uint32_t)process_wrapper;
+    --stack_ptr; *((uint32_t*)stack_ptr) = 0;  // EBP
+    --stack_ptr; *((uint32_t*)stack_ptr) = 0;  // EBX
+    --stack_ptr; *((uint32_t*)stack_ptr) = 0;  // ESI  
+    --stack_ptr; *((uint32_t*)stack_ptr) = 0;  // EDI
+    
+    p->context = (void*)stack_ptr;
+    p->exit_code = 0;
+    p->state = PROCESS_STATE_READY;
+
+    // Enqueue to ready queue
+    return process_readyq_enqueue(p->pid);
+}
+
 const char* process_state_str(process_state_t state) {
     switch (state) {
         case PROCESS_STATE_UNUSED: return "UNUSED";
