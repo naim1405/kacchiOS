@@ -250,25 +250,6 @@ static void cmd_runq(void) {
     (void)next_pid;
 }
 
-static void cmd_sched_stats(void) {
-    scheduler_stats_t stats = scheduler_get_stats();
-    serial_puts("=== Scheduler Statistics ===\n");
-    serial_puts("Context switches: ");
-    serial_put_u32(stats.total_context_switches);
-    serial_puts("\n");
-    serial_puts("Quantum expiries: ");
-    serial_put_u32(stats.total_quantum_expiries);
-    serial_puts("\n");
-    serial_puts("Current quantum used: ");
-    serial_put_u32(stats.current_quantum_used);
-    serial_puts("/");
-    serial_put_u32(scheduler_get_quantum());
-    serial_puts(" ms\n");
-    serial_puts("Ready queue size: ");
-    serial_put_u32(scheduler_ready_queue_size());
-    serial_puts("\n");
-}
-
 void kmain(void) {
     char input[MAX_INPUT];
     int pos = 0;
@@ -296,7 +277,7 @@ void kmain(void) {
     serial_puts("========================================\n");
     serial_puts("Hello from kacchiOS!\n");
     serial_puts("Running null process...\n\n");
-    serial_puts("Commands: ps | run PID | runq | kill PID | sched\n\n");
+    serial_puts("Commands: ps | run PID | runq | kill PID\n\n");
 
     /* Main loop - the "null process" */
     while (1) {
@@ -341,10 +322,8 @@ void kmain(void) {
                 }
             } else if (strcmp(input, "runq") == 0) {
                 cmd_runq();
-            } else if (strcmp(input, "sched") == 0) {
-                cmd_sched_stats();
             } else {
-                serial_puts("Unknown command. Try: ps | run PID | runq | kill PID | sched\n");
+                serial_puts("Unknown command. Try: ps | run PID | runq | kill PID\n");
             }
         }
     }
