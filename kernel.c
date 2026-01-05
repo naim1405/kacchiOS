@@ -40,27 +40,6 @@ static void serial_put_hex32(uint32_t value) {
 
 static uint32_t g_rng_state = 0xC0FFEE01;
 
-static uint32_t rand_u32(void) {
-    // Simple LCG (good enough for demo output)
-    g_rng_state = (1103515245u * g_rng_state) + 12345u;
-    return g_rng_state;
-}
-
-static char rand_alnum(void) {
-    const uint32_t r = rand_u32() % 62u;
-    if (r < 10u) return (char)('0' + r);
-    if (r < 36u) return (char)('A' + (r - 10u));
-    return (char)('a' + (r - 36u));
-}
-
-static void rand_string(char* out, uint32_t length) {
-    if (!out) return;
-    for (uint32_t i = 0; i < length; i++) {
-        out[i] = rand_alnum();
-    }
-    out[length] = '\0';
-}
-
 static uint32_t parse_u32(const char* s, uint32_t* out_ok) {
     uint32_t value = 0;
     uint32_t ok = 0;
@@ -89,34 +68,7 @@ static int starts_with(const char* s, const char* prefix) {
     return 1;
 }
 
-static void busy_wait(uint32_t iterations) {
-    volatile uint32_t count = 0;
-    for (uint32_t i = 0; i < iterations; i++) {
-        count++;
-    }
-}
-
-static void print_current_process_info(void) {
-    process_t* p = process_current();
-    serial_puts("[proc] pid=");
-    serial_put_u32(p ? p->pid : 0);
-    serial_puts(" name=");
-    serial_puts(p ? p->name : "(null)");
-    serial_puts(" state=");
-    serial_puts(p ? process_state_str(p->state) : "(null)");
-    serial_puts(" stack=");
-    if (p) {
-        serial_put_hex32((uint32_t)p->stack_base);
-        serial_puts("+");
-        serial_put_u32(p->stack_size);
-    } else {
-        serial_puts("(null)");
-    }
-    serial_puts(" mbox=");
-    serial_put_u32(p ? p->mailbox_count : 0);
-    serial_puts("\n");
-}
-
+// Process functions
 static void proc_p1(void* arg) {
     (void)arg;
     process_t* p = process_current();
@@ -217,6 +169,7 @@ static void proc_p5(void* arg) {
     }
 }
 
+// Commands
 static void cmd_ps(void) {
     serial_puts("PID\tSTATE\t\tNAME\n");
     for (uint32_t i = 0; i < process_capacity(); i++) {
@@ -290,7 +243,7 @@ static void cmd_runq(void) {
     // Re-enqueue for round-robin
     process_readyq_enqueue(pid);
     
-    serial_puts("runq: starting preemptive scheduling with pid=");
+    serial_puts("runq: starting timer-assisted cooperative scheduling with pid=");
     serial_put_u32(pid);
     serial_puts("\n");
     
