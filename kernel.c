@@ -88,6 +88,13 @@ static int starts_with(const char* s, const char* prefix) {
     return 1;
 }
 
+static void busy_wait(uint32_t iterations) {
+    volatile uint32_t count = 0;
+    for (uint32_t i = 0; i < iterations; i++) {
+        count++;
+    }
+}
+
 static void print_current_process_info(void) {
     process_t* p = process_current();
     serial_puts("[proc] pid=");
@@ -112,151 +119,70 @@ static void print_current_process_info(void) {
 static void proc_p1(void* arg) {
     (void)arg;
     process_t* p = process_current();
-    g_rng_state ^= (p ? (p->pid * 2654435761u) : 0x1234u);
-    print_current_process_info();
 
-    char msg[8];
-    msg[0] = 'p';
-    msg[1] = '1';
-    msg[2] = '\0';
-
-    for (uint32_t i = 0; i <= 20000u; i++) {
-        if ((i % 10u) == 0u) {
-            msg[2] = rand_alnum();
-            msg[3] = '\0';
-            serial_puts("[p1] pid=");
-            serial_put_u32(p ? p->pid : 0);
-            serial_puts(" i=");
-            serial_put_u32(i);
-            serial_puts(" msg=");
-            serial_puts(msg);
-            serial_puts("\n");
-        }
+    for (uint32_t i = 0; i < 10; i++) {
+        serial_puts("[p1] msg=");
+        serial_put_u32(i);
+        serial_puts(" pid=");
+        serial_put_u32(p ? p->pid : 0);
+        serial_puts("\n");
+        busy_wait(200000000);
     }
 }
 
 static void proc_p2(void* arg) {
     (void)arg;
     process_t* p = process_current();
-    g_rng_state ^= (p ? (p->pid * 2654435761u) : 0x5678u);
-    print_current_process_info();
 
-    char rnd[9];
-    char msg[3 + 9];
-    msg[0] = 'p';
-    msg[1] = '2';
-    msg[2] = '\0';
-
-    for (uint32_t i = 0; i <= 20000u; i++) {
-        if ((i % 10u) == 0u) {
-            rand_string(rnd, 8);
-            msg[0] = 'p';
-            msg[1] = '2';
-            for (uint32_t j = 0; j < 8u; j++) {
-                msg[2 + j] = rnd[j];
-            }
-            msg[10] = '\0';
-
-            serial_puts("[p2] pid=");
-            serial_put_u32(p ? p->pid : 0);
-            serial_puts(" i=");
-            serial_put_u32(i);
-            serial_puts(" msg=");
-            serial_puts(msg);
-            serial_puts("\n");
-        }
+    for (uint32_t i = 0; i < 10; i++) {
+        serial_puts("[p2] msg=");
+        serial_put_u32(i);
+        serial_puts(" pid=");
+        serial_put_u32(p ? p->pid : 0);
+        serial_puts("\n");
+        busy_wait(200000000);
     }
 }
 
 static void proc_p3(void* arg) {
     (void)arg;
     process_t* p = process_current();
-    g_rng_state ^= (p ? (p->pid * 2654435761u) : 0x9ABCu);
-    print_current_process_info();
 
-    char rnd[9];
-    char msg[3 + 9];
-    msg[0] = 'p';
-    msg[1] = '3';
-    msg[2] = '\0';
-
-    for (uint32_t i = 0; i <= 20000u; i++) {
-        if ((i % 10u) == 0u) {
-            rand_string(rnd, 8);
-            msg[0] = 'p';
-            msg[1] = '3';
-            for (uint32_t j = 0; j < 8u; j++) {
-                msg[2 + j] = rnd[j];
-            }
-            msg[10] = '\0';
-
-            serial_puts("[p3] pid=");
-            serial_put_u32(p ? p->pid : 0);
-            serial_puts(" i=");
-            serial_put_u32(i);
-            serial_puts(" msg=");
-            serial_puts(msg);
-            serial_puts("\n");
-        }
+    for (uint32_t i = 0; i < 10; i++) {
+        serial_puts("[p3] msg=");
+        serial_put_u32(i);
+        serial_puts(" pid=");
+        serial_put_u32(p ? p->pid : 0);
+        serial_puts("\n");
+        busy_wait(200000000);
     }
 }
 
 static void proc_p4(void* arg) {
     (void)arg;
     process_t* p = process_current();
-    g_rng_state ^= (p ? (p->pid * 2654435761u) : 0xDEF0u);
-    print_current_process_info();
 
-    char msg[8];
-    msg[0] = 'p';
-    msg[1] = '4';
-    msg[2] = '\0';
-
-    for (uint32_t i = 0; i <= 20000u; i++) {
-        if ((i % 10u) == 0u) {
-            msg[2] = rand_alnum();
-            msg[3] = '\0';
-            serial_puts("[p4] pid=");
-            serial_put_u32(p ? p->pid : 0);
-            serial_puts(" i=");
-            serial_put_u32(i);
-            serial_puts(" msg=");
-            serial_puts(msg);
-            serial_puts("\n");
-        }
+    for (uint32_t i = 0; i < 10; i++) {
+        serial_puts("[p4] msg=");
+        serial_put_u32(i);
+        serial_puts(" pid=");
+        serial_put_u32(p ? p->pid : 0);
+        serial_puts("\n");
+        busy_wait(200000000);
     }
 }
 
 static void proc_p5(void* arg) {
     (void)arg;
     process_t* p = process_current();
-    g_rng_state ^= (p ? (p->pid * 2654435761u) : 0xFEDCu);
-    print_current_process_info();
 
-    char rnd[9];
-    char msg[3 + 9];
-    msg[0] = 'p';
-    msg[1] = '5';
-    msg[2] = '\0';
-
-    for (uint32_t i = 0; i <= 20000u; i++) {
-        if ((i % 10u) == 0u) {
-            rand_string(rnd, 8);
-            msg[0] = 'p';
-            msg[1] = '5';
-            for (uint32_t j = 0; j < 8u; j++) {
-                msg[2 + j] = rnd[j];
-            }
-            msg[10] = '\0';
-
-            serial_puts("[p5] pid=");
-            serial_put_u32(p ? p->pid : 0);
-            serial_puts(" i=");
-            serial_put_u32(i);
-            serial_puts(" msg=");
-            serial_puts(msg);
-            serial_puts("\n");
-        }
+    for (uint32_t i = 0; i < 10; i++) {
+        serial_puts("[p5] msg=");
+        serial_put_u32(i);
+        serial_puts(" pid=");
+        serial_put_u32(p ? p->pid : 0);
+        serial_puts("\n");
+        busy_wait(200000000);
     }
 }
 
