@@ -41,8 +41,6 @@ void interrupt_init(void) {
     idt_ptr.base = (uint32_t)&idt;
     
     __asm__ volatile("lidt %0" : : "m"(idt_ptr));
-    
-    serial_puts("IDT initialized\n");
 }
 
 // PIC (Programmable Interrupt Controller) helper functions
@@ -84,10 +82,6 @@ void timer_init(uint32_t frequency_hz) {
     // Send divisor
     __asm__ volatile("outb %0, $0x40" : : "a"((uint8_t)(divisor & 0xFF)));
     __asm__ volatile("outb %0, $0x40" : : "a"((uint8_t)((divisor >> 8) & 0xFF)));
-    
-    serial_puts("Timer initialized at ");
-    // serial_put_u32(frequency_hz);  // Would need to export this
-    serial_puts("Hz\n");
 }
 
 uint32_t timer_get_ticks(void) {

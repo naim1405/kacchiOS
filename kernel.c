@@ -276,84 +276,19 @@ void kmain(void) {
     /* Initialize hardware */
     serial_init();
 
-    /* Initialize memory manager (heap + stack) */
+    /* Initialize subsystems */
     memory_init((uint32_t)&__kernel_end);
-    serial_puts("Memory manager initialized\n\n");
-
-    /* Initialize process manager */
     process_init();
-    serial_puts("Process manager initialized\n\n");
-
-    /* Initialize scheduler */
     scheduler_init(SCHEDULER_DEFAULT_QUANTUM);
-    serial_puts("Scheduler initialized (Round-Robin)\n\n");
-
-    /* Initialize interrupts and timer */
     interrupt_init();
     timer_init(100);  // 100 Hz = 10ms per tick
-    serial_puts("Interrupts and timer initialized\n\n");
 
-    // Hardcoded ready processes for quick testing
-    serial_puts("Creating process p1...\n");
+    /* Create ready processes */
     process_create("p1", proc_p1, NULL, 0);
-    serial_puts("Created p1\n");
-    
-    serial_puts("Creating process p2...\n");
     process_create("p2", proc_p2, NULL, 0);
-    serial_puts("Created p2\n");
-    
-    serial_puts("Creating process p3...\n");
     process_create("p3", proc_p3, NULL, 0);
-    serial_puts("Created p3\n");
-    
-    serial_puts("Creating process p4...\n");
     process_create("p4", proc_p4, NULL, 0);
-    serial_puts("Created p4\n");
-    
-    serial_puts("Creating process p5...\n");
     process_create("p5", proc_p5, NULL, 0);
-    serial_puts("Created p5\n\n");
-
-    /* ================= HEAP TESTS ================= */
-    serial_puts("=== HEAP TESTS ===\n");
-
-    char* h1 = (char*)kmalloc(16);
-    strcpy(h1, "Heap1");
-    serial_puts("Allocated h1: "); serial_puts(h1); serial_puts("\n");
-
-    char* h2 = (char*)kmalloc(32);
-    strcpy(h2, "Heap2");
-    serial_puts("Allocated h2: "); serial_puts(h2); serial_puts("\n");
-
-    kfree(h1); // Free first block
-    serial_puts("Freed h1\n");
-
-    char* h3 = (char*)kmalloc(8); // Should reuse h1 space if merged/split
-    strcpy(h3, "H3");
-    serial_puts("Allocated h3 after free: "); serial_puts(h3); serial_puts("\n");
-
-    kfree(h2);
-    kfree(h3);
-    serial_puts("Freed h2 and h3\n");
-
-    /* ================= STACK TESTS ================= */
-    serial_puts("\n=== STACK TESTS ===\n");
-
-    char* s1 = (char*)kalloc_stack(1024);
-    strcpy(s1, "Stack1");
-    serial_puts("Allocated s1: "); serial_puts(s1); serial_puts("\n");
-
-    char* s2 = (char*)kalloc_stack(512);
-    strcpy(s2, "Stack2");
-    serial_puts("Allocated s2: "); serial_puts(s2); serial_puts("\n");
-
-    kfree_stack(s2); // Free last stack first
-    serial_puts("Freed s2\n");
-
-    kfree_stack(s1); // Free first stack
-    serial_puts("Freed s1\n");
-
-    serial_puts("\nAll memory tests completed successfully!\n\n");
 
     /* ================= WELCOME MESSAGE ================= */
     serial_puts("========================================\n");
