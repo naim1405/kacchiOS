@@ -190,6 +190,32 @@ static void cmd_kill(uint32_t pid) {
     serial_puts("\n");
 }
 
+static void cmd_ready(uint32_t pid) {
+    process_t* p = process_get(pid);
+    if (!p) {
+        serial_puts("ready: no such pid\n");
+        return;
+    }
+
+    if (p->state == PROCESS_STATE_TERMINATED) {
+        // Restart terminated process
+        int32_t rc = process_restart(pid);
+        if (rc < 0) {
+            serial_puts("ready: failed to restart\n");
+            return;
+        }
+        serial_puts("ready: restarted pid=");
+        serial_put_u32(pid);
+        serial_puts("\n");
+    } else if (p->state == PROCESS_STATE_READY) {
+        serial_puts("ready: pid=");
+        serial_put_u32(pid);
+        serial_puts(" already ready\n");
+    } else {
+        serial_puts("ready: cannot ready non-terminated process\n");
+    }
+}
+
 static void cmd_run(uint32_t pid) {
     process_t* p = process_get(pid);
     if (!p) {
@@ -287,7 +313,7 @@ void kmain(void) {
     serial_puts("========================================\n");
     serial_puts("Hello from kacchiOS!\n");
     serial_puts("Running null process...\n\n");
-    serial_puts("Commands: ps | run PID | runq | kill PID\n\n");
+    serial_puts("Commands: ps | ready PID | run PID | runq | kill PID\n\n");
 
     /* Main loop - the "null process" */
     while (1) {
@@ -314,6 +340,14 @@ void kmain(void) {
         if (pos > 0) {
             if (strcmp(input, "ps") == 0) {
                 cmd_ps();
+            } else if (starts_with(input, "ready ")) {
+                uint32_t ok = 0;
+                uint32_t pid = parse_u32(input + 6, &ok);
+                if (!ok) {
+                    serial_puts("usage: ready PID\n");
+                } else {
+                    cmd_ready(pid);
+                }
             } else if (starts_with(input, "run ")) {
                 uint32_t ok = 0;
                 uint32_t pid = parse_u32(input + 4, &ok);
@@ -333,7 +367,7 @@ void kmain(void) {
             } else if (strcmp(input, "runq") == 0) {
                 cmd_runq();
             } else {
-                serial_puts("Unknown command. Try: ps | run PID | runq | kill PID\n");
+                serial_puts("Unknown command. Try: ps | ready PID | run PID | runq | kill PID\n");
             }
         }
     }
