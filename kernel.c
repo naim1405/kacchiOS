@@ -2,6 +2,7 @@
 #include "types.h"
 #include "serial.h"
 #include "string.h"
+#include "interrupt.h"
 #include "src/memory.h"
 #include "src/process.h"
 #include "src/scheduler.h"
@@ -126,8 +127,13 @@ static void proc_p1(void* arg) {
         serial_puts(" pid=");
         serial_put_u32(p ? p->pid : 0);
         serial_puts("\n");
-        busy_wait(200000000);
-        process_yield();  // Yield to other processes
+        
+        // Check periodically if quantum expired and yield
+        for (volatile uint32_t j = 0; j < 10000000; j++) {
+            if ((j % 10000000) == 0 && scheduler_should_switch()) {
+                process_yield();
+            }
+        }
     }
 }
 
@@ -141,8 +147,13 @@ static void proc_p2(void* arg) {
         serial_puts(" pid=");
         serial_put_u32(p ? p->pid : 0);
         serial_puts("\n");
-        busy_wait(200000000);
-        process_yield();  // Yield to other processes
+        
+        // Check periodically if quantum expired and yield
+        for (volatile uint32_t j = 0; j < 20000000; j++) {
+            if ((j % 10000000) == 0 && scheduler_should_switch()) {
+                process_yield();
+            }
+        }
     }
 }
 
@@ -156,8 +167,13 @@ static void proc_p3(void* arg) {
         serial_puts(" pid=");
         serial_put_u32(p ? p->pid : 0);
         serial_puts("\n");
-        busy_wait(200000000);
-        process_yield();  // Yield to other processes
+        
+        // Check periodically if quantum expired and yield
+        for (volatile uint32_t j = 0; j < 30000000; j++) {
+            if ((j % 10000000) == 0 && scheduler_should_switch()) {
+                process_yield();
+            }
+        }
     }
 }
 
@@ -171,8 +187,13 @@ static void proc_p4(void* arg) {
         serial_puts(" pid=");
         serial_put_u32(p ? p->pid : 0);
         serial_puts("\n");
-        busy_wait(200000000);
-        process_yield();  // Yield to other processes
+        
+        // Check periodically if quantum expired and yield
+        for (volatile uint32_t j = 0; j < 40000000; j++) {
+            if ((j % 10000000) == 0 && scheduler_should_switch()) {
+                process_yield();
+            }
+        }
     }
 }
 
@@ -186,8 +207,13 @@ static void proc_p5(void* arg) {
         serial_puts(" pid=");
         serial_put_u32(p ? p->pid : 0);
         serial_puts("\n");
-        busy_wait(200000000);
-        process_yield();  // Yield to other processes
+        
+        // Check periodically if quantum expired and yield
+        for (volatile uint32_t j = 0; j < 50000000; j++) {
+            if ((j % 10000000) == 0 && scheduler_should_switch()) {
+                process_yield();
+            }
+        }
     }
 }
 
@@ -252,7 +278,7 @@ static void cmd_run(uint32_t pid) {
 
 static void cmd_runq(void) {
     // Get the first ready process and start it
-    // Processes will cooperatively yield to each other via process_yield()
+    // Timer interrupts will preemptively switch between processes
     uint32_t pid = 0;
     int32_t rc = process_readyq_dequeue(&pid);
     
@@ -264,14 +290,14 @@ static void cmd_runq(void) {
     // Re-enqueue for round-robin
     process_readyq_enqueue(pid);
     
-    serial_puts("runq: starting with pid=");
+    serial_puts("runq: starting preemptive scheduling with pid=");
     serial_put_u32(pid);
     serial_puts("\n");
     
-    serial_puts("runq: about to call scheduler_context_switch\n");
+    // Enable interrupts to allow timer preemption
+    enable_interrupts();
     
-    // Start the first process - it will yield to others
-    // When all processes complete, control returns here
+    // Start the first process - timer will preempt and switch between them
     int32_t next_pid = scheduler_context_switch();
     
     serial_puts("runq: returned from scheduler, next_pid=");
@@ -318,6 +344,11 @@ void kmain(void) {
     /* Initialize scheduler */
     scheduler_init(SCHEDULER_DEFAULT_QUANTUM);
     serial_puts("Scheduler initialized (Round-Robin)\n\n");
+
+    /* Initialize interrupts and timer */
+    interrupt_init();
+    timer_init(100);  // 100 Hz = 10ms per tick
+    serial_puts("Interrupts and timer initialized\n\n");
 
     // Hardcoded ready processes for quick testing
     serial_puts("Creating process p1...\n");
