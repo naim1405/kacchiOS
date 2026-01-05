@@ -109,14 +109,6 @@ static void print_current_process_info(void) {
     serial_puts("\n");
 }
 
-static void dummy_process(void* arg) {
-    const char* tag = (const char*)arg;
-    print_current_process_info();
-    serial_puts("[dummy] running: ");
-    serial_puts(tag ? tag : "(null)");
-    serial_puts("\n");
-}
-
 static void proc_p1(void* arg) {
     (void)arg;
     process_t* p = process_current();
@@ -209,6 +201,65 @@ static void proc_p3(void* arg) {
     }
 }
 
+static void proc_p4(void* arg) {
+    (void)arg;
+    process_t* p = process_current();
+    g_rng_state ^= (p ? (p->pid * 2654435761u) : 0xDEF0u);
+    print_current_process_info();
+
+    char msg[8];
+    msg[0] = 'p';
+    msg[1] = '4';
+    msg[2] = '\0';
+
+    for (uint32_t i = 0; i <= 20000u; i++) {
+        if ((i % 10u) == 0u) {
+            msg[2] = rand_alnum();
+            msg[3] = '\0';
+            serial_puts("[p4] pid=");
+            serial_put_u32(p ? p->pid : 0);
+            serial_puts(" i=");
+            serial_put_u32(i);
+            serial_puts(" msg=");
+            serial_puts(msg);
+            serial_puts("\n");
+        }
+    }
+}
+
+static void proc_p5(void* arg) {
+    (void)arg;
+    process_t* p = process_current();
+    g_rng_state ^= (p ? (p->pid * 2654435761u) : 0xFEDCu);
+    print_current_process_info();
+
+    char rnd[9];
+    char msg[3 + 9];
+    msg[0] = 'p';
+    msg[1] = '5';
+    msg[2] = '\0';
+
+    for (uint32_t i = 0; i <= 20000u; i++) {
+        if ((i % 10u) == 0u) {
+            rand_string(rnd, 8);
+            msg[0] = 'p';
+            msg[1] = '5';
+            for (uint32_t j = 0; j < 8u; j++) {
+                msg[2 + j] = rnd[j];
+            }
+            msg[10] = '\0';
+
+            serial_puts("[p5] pid=");
+            serial_put_u32(p ? p->pid : 0);
+            serial_puts(" i=");
+            serial_put_u32(i);
+            serial_puts(" msg=");
+            serial_puts(msg);
+            serial_puts("\n");
+        }
+    }
+}
+
 static void cmd_ps(void) {
     serial_puts("PID\tSTATE\t\tNAME\n");
     for (uint32_t i = 0; i < process_capacity(); i++) {
@@ -226,34 +277,6 @@ static void cmd_ps(void) {
         serial_puts(p->name);
         serial_puts("\n");
     }
-}
-
-static void cmd_spawn(uint32_t n) {
-    if (n == 0) {
-        serial_puts("spawn: provide N > 0\n");
-        return;
-    }
-
-    uint32_t created = 0;
-    for (uint32_t i = 0; i < n; i++) {
-        int32_t pid = process_create("dummy", dummy_process, "dummy", 0);
-        if (pid < 0) {
-            serial_puts("spawn: failed at i=");
-            serial_put_u32(i);
-            serial_puts(" err=");
-            serial_put_u32((uint32_t)(-pid));
-            serial_puts("\n");
-            break;
-        }
-        created++;
-        serial_puts("spawned pid=");
-        serial_put_u32((uint32_t)pid);
-        serial_puts("\n");
-    }
-
-    serial_puts("spawn: created ");
-    serial_put_u32(created);
-    serial_puts(" process(es)\n");
 }
 
 static void cmd_kill(uint32_t pid) {
@@ -366,6 +389,8 @@ void kmain(void) {
     process_create("p1", proc_p1, NULL, 0);
     process_create("p2", proc_p2, NULL, 0);
     process_create("p3", proc_p3, NULL, 0);
+    process_create("p4", proc_p4, NULL, 0);
+    process_create("p5", proc_p5, NULL, 0);
 
     /* ================= HEAP TESTS ================= */
     serial_puts("=== HEAP TESTS ===\n");
@@ -414,7 +439,7 @@ void kmain(void) {
     serial_puts("========================================\n");
     serial_puts("Hello from kacchiOS!\n");
     serial_puts("Running null process...\n\n");
-    serial_puts("Commands: ps | spawn N | run PID | runq | kill PID | sched\n\n");
+    serial_puts("Commands: ps | run PID | runq | kill PID | sched\n\n");
 
     /* Main loop - the "null process" */
     while (1) {
@@ -441,14 +466,6 @@ void kmain(void) {
         if (pos > 0) {
             if (strcmp(input, "ps") == 0) {
                 cmd_ps();
-            } else if (starts_with(input, "spawn ")) {
-                uint32_t ok = 0;
-                uint32_t n = parse_u32(input + 6, &ok);
-                if (!ok) {
-                    serial_puts("usage: spawn N\n");
-                } else {
-                    cmd_spawn(n);
-                }
             } else if (starts_with(input, "run ")) {
                 uint32_t ok = 0;
                 uint32_t pid = parse_u32(input + 4, &ok);
@@ -470,7 +487,7 @@ void kmain(void) {
             } else if (strcmp(input, "sched") == 0) {
                 cmd_sched_stats();
             } else {
-                serial_puts("Unknown command. Try: ps | spawn N | run PID | runq | kill PID | sched\n");
+                serial_puts("Unknown command. Try: ps | run PID | runq | kill PID | sched\n");
             }
         }
     }
