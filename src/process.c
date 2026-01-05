@@ -2,6 +2,36 @@
 
 #include "memory.h"
 
+// Forward declare to avoid circular dependency
+int32_t scheduler_context_switch(void);
+
+// External assembly context switch routine
+extern void ctxsw(void** old_sp, void** new_sp);
+
+// Helper to wrap process entry
+static void process_wrapper(void) {
+    process_t* p = process_current();
+    if (p && p->entry) {
+        p->entry(p->arg);
+    }
+    // Process returned, terminate it
+    if (p) {
+        process_terminate(p->pid, 0);
+    }
+    
+    // Try to switch to another process
+    // If no processes left, halt the system
+    while (1) {
+        if (process_readyq_count() == 0) {
+            // No more processes - halt forever
+            while(1) {
+                __asm__ volatile("hlt");
+            }
+        }
+        process_yield();
+    }
+}
+
 #define PID_KERNEL 0
 
 static process_t g_process_table[PROCESS_MAX];
@@ -57,6 +87,7 @@ static void reset_pcb(process_t* p) {
     p->stack_base = NULL;
     p->stack_size = 0;
     p->stack_top = NULL;
+    p->context = NULL;
     p->exit_code = 0;
 
     p->mailbox_head = 0;
@@ -81,6 +112,7 @@ void process_init(void) {
     g_process_table[0].stack_base = NULL;
     g_process_table[0].stack_size = 0;
     g_process_table[0].stack_top = NULL;
+    g_process_table[0].context = NULL;
     g_process_table[0].exit_code = 0;
 
     g_process_table[0].mailbox_head = 0;
@@ -203,6 +235,24 @@ int32_t process_create(const char* name, process_entry_t entry, void* arg, uint3
     p->stack_size = stack_size;
     p->stack_top = (void*)((uint32_t)stack + stack_size);
 
+    // Initialize stack for context switching
+    // Stack grows downward, so start from top
+    // Use volatile to prevent optimizer from breaking this
+    volatile uint32_t* stack_ptr = (volatile uint32_t*)p->stack_top;
+    
+    // Push initial context onto stack to match what start_process/ctxsw expects
+    // When start_process loads this ESP and does pops + ret, it should:
+    // - pop EDI, ESI, EBX, EBP (all 0)
+    // - ret (pops return address and jumps there)
+    --stack_ptr; *((uint32_t*)stack_ptr) = (uint32_t)process_wrapper;  // Return address
+    --stack_ptr; *((uint32_t*)stack_ptr) = 0;  // EBP
+    --stack_ptr; *((uint32_t*)stack_ptr) = 0;  // EBX
+    --stack_ptr; *((uint32_t*)stack_ptr) = 0;  // ESI  
+    --stack_ptr; *((uint32_t*)stack_ptr) = 0;  // EDI
+    
+    // Context IS the stack pointer (not a pointer to a struct)
+    p->context = (void*)stack_ptr;
+
     p->exit_code = 0;
 
     p->mailbox_head = 0;
@@ -288,6 +338,52 @@ int32_t process_terminate(uint32_t pid, int32_t exit_code) {
     return 0;
 }
 
+int32_t process_restart(uint32_t pid) {
+    if (pid == 0) {
+        return -2; // cannot restart kernel process
+    }
+
+    process_t* p = process_get(pid);
+    if (!p) {
+        return -1;
+    }
+
+    if (p->state != PROCESS_STATE_TERMINATED) {
+        return -3; // only restart terminated processes
+    }
+
+    if (!p->entry) {
+        return -4; // no entry function
+    }
+
+    // Allocate new stack
+    uint32_t stack_size = p->stack_size > 0 ? p->stack_size : PROCESS_DEFAULT_STACK_SIZE;
+    void* stack = kmalloc(stack_size);
+    if (!stack) {
+        return -5; // out of memory
+    }
+
+    p->stack_base = stack;
+    p->stack_size = stack_size;
+    p->stack_top = (void*)((uint32_t)stack + stack_size);
+
+    // Initialize stack for context switching (same as process_create)
+    volatile uint32_t* stack_ptr = (volatile uint32_t*)p->stack_top;
+    
+    --stack_ptr; *((uint32_t*)stack_ptr) = (uint32_t)process_wrapper;
+    --stack_ptr; *((uint32_t*)stack_ptr) = 0;  // EBP
+    --stack_ptr; *((uint32_t*)stack_ptr) = 0;  // EBX
+    --stack_ptr; *((uint32_t*)stack_ptr) = 0;  // ESI  
+    --stack_ptr; *((uint32_t*)stack_ptr) = 0;  // EDI
+    
+    p->context = (void*)stack_ptr;
+    p->exit_code = 0;
+    p->state = PROCESS_STATE_READY;
+
+    // Enqueue to ready queue
+    return process_readyq_enqueue(p->pid);
+}
+
 const char* process_state_str(process_state_t state) {
     switch (state) {
         case PROCESS_STATE_UNUSED: return "UNUSED";
@@ -298,6 +394,11 @@ const char* process_state_str(process_state_t state) {
         case PROCESS_STATE_TERMINATED: return "TERMINATED";
         default: return "UNKNOWN";
     }
+}
+
+void process_yield(void) {
+    // Cooperatively yield CPU to next process
+    scheduler_context_switch();
 }
 
 static void ipc_copy_payload(uint8_t* dst, const uint8_t* src, uint32_t length) {

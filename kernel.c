@@ -2,8 +2,10 @@
 #include "types.h"
 #include "serial.h"
 #include "string.h"
+#include "interrupt.h"
 #include "src/memory.h"
 #include "src/process.h"
+#include "src/scheduler.h"
 
 #define MAX_INPUT 128
 
@@ -26,37 +28,6 @@ static void serial_put_u32(uint32_t value) {
     while (i > 0) {
         serial_putc(buf[--i]);
     }
-}
-
-static void serial_put_hex32(uint32_t value) {
-    static const char* hex = "0123456789ABCDEF";
-    serial_puts("0x");
-    for (int shift = 28; shift >= 0; shift -= 4) {
-        serial_putc(hex[(value >> shift) & 0xF]);
-    }
-}
-
-static uint32_t g_rng_state = 0xC0FFEE01;
-
-static uint32_t rand_u32(void) {
-    // Simple LCG (good enough for demo output)
-    g_rng_state = (1103515245u * g_rng_state) + 12345u;
-    return g_rng_state;
-}
-
-static char rand_alnum(void) {
-    const uint32_t r = rand_u32() % 62u;
-    if (r < 10u) return (char)('0' + r);
-    if (r < 36u) return (char)('A' + (r - 10u));
-    return (char)('a' + (r - 36u));
-}
-
-static void rand_string(char* out, uint32_t length) {
-    if (!out) return;
-    for (uint32_t i = 0; i < length; i++) {
-        out[i] = rand_alnum();
-    }
-    out[length] = '\0';
 }
 
 static uint32_t parse_u32(const char* s, uint32_t* out_ok) {
@@ -87,57 +58,23 @@ static int starts_with(const char* s, const char* prefix) {
     return 1;
 }
 
-static void print_current_process_info(void) {
-    process_t* p = process_current();
-    serial_puts("[proc] pid=");
-    serial_put_u32(p ? p->pid : 0);
-    serial_puts(" name=");
-    serial_puts(p ? p->name : "(null)");
-    serial_puts(" state=");
-    serial_puts(p ? process_state_str(p->state) : "(null)");
-    serial_puts(" stack=");
-    if (p) {
-        serial_put_hex32((uint32_t)p->stack_base);
-        serial_puts("+");
-        serial_put_u32(p->stack_size);
-    } else {
-        serial_puts("(null)");
-    }
-    serial_puts(" mbox=");
-    serial_put_u32(p ? p->mailbox_count : 0);
-    serial_puts("\n");
-}
-
-static void dummy_process(void* arg) {
-    const char* tag = (const char*)arg;
-    print_current_process_info();
-    serial_puts("[dummy] running: ");
-    serial_puts(tag ? tag : "(null)");
-    serial_puts("\n");
-}
-
+// Process functions
 static void proc_p1(void* arg) {
     (void)arg;
     process_t* p = process_current();
-    g_rng_state ^= (p ? (p->pid * 2654435761u) : 0x1234u);
-    print_current_process_info();
 
-    char msg[8];
-    msg[0] = 'p';
-    msg[1] = '1';
-    msg[2] = '\0';
-
-    for (uint32_t i = 0; i <= 20000u; i++) {
-        if ((i % 10u) == 0u) {
-            msg[2] = rand_alnum();
-            msg[3] = '\0';
-            serial_puts("[p1] pid=");
-            serial_put_u32(p ? p->pid : 0);
-            serial_puts(" i=");
-            serial_put_u32(i);
-            serial_puts(" msg=");
-            serial_puts(msg);
-            serial_puts("\n");
+    for (uint32_t i = 0; i < 10; i++) {
+        serial_puts("[p1] msg=");
+        serial_put_u32(i);
+        serial_puts(" pid=");
+        serial_put_u32(p ? p->pid : 0);
+        serial_puts("\n");
+        
+        // Check periodically if quantum expired and yield
+        for (volatile uint32_t j = 0; j < 10000000; j++) {
+            if ((j % 10000000) == 0 && scheduler_should_switch()) {
+                process_yield();
+            }
         }
     }
 }
@@ -145,32 +82,19 @@ static void proc_p1(void* arg) {
 static void proc_p2(void* arg) {
     (void)arg;
     process_t* p = process_current();
-    g_rng_state ^= (p ? (p->pid * 2654435761u) : 0x5678u);
-    print_current_process_info();
 
-    char rnd[9];
-    char msg[3 + 9];
-    msg[0] = 'p';
-    msg[1] = '2';
-    msg[2] = '\0';
-
-    for (uint32_t i = 0; i <= 20000u; i++) {
-        if ((i % 10u) == 0u) {
-            rand_string(rnd, 8);
-            msg[0] = 'p';
-            msg[1] = '2';
-            for (uint32_t j = 0; j < 8u; j++) {
-                msg[2 + j] = rnd[j];
+    for (uint32_t i = 0; i < 10; i++) {
+        serial_puts("[p2] msg=");
+        serial_put_u32(i);
+        serial_puts(" pid=");
+        serial_put_u32(p ? p->pid : 0);
+        serial_puts("\n");
+        
+        // Check periodically if quantum expired and yield
+        for (volatile uint32_t j = 0; j < 20000000; j++) {
+            if ((j % 10000000) == 0 && scheduler_should_switch()) {
+                process_yield();
             }
-            msg[10] = '\0';
-
-            serial_puts("[p2] pid=");
-            serial_put_u32(p ? p->pid : 0);
-            serial_puts(" i=");
-            serial_put_u32(i);
-            serial_puts(" msg=");
-            serial_puts(msg);
-            serial_puts("\n");
         }
     }
 }
@@ -178,36 +102,64 @@ static void proc_p2(void* arg) {
 static void proc_p3(void* arg) {
     (void)arg;
     process_t* p = process_current();
-    g_rng_state ^= (p ? (p->pid * 2654435761u) : 0x9ABCu);
-    print_current_process_info();
 
-    char rnd[9];
-    char msg[3 + 9];
-    msg[0] = 'p';
-    msg[1] = '3';
-    msg[2] = '\0';
-
-    for (uint32_t i = 0; i <= 20000u; i++) {
-        if ((i % 10u) == 0u) {
-            rand_string(rnd, 8);
-            msg[0] = 'p';
-            msg[1] = '3';
-            for (uint32_t j = 0; j < 8u; j++) {
-                msg[2 + j] = rnd[j];
+    for (uint32_t i = 0; i < 10; i++) {
+        serial_puts("[p3] msg=");
+        serial_put_u32(i);
+        serial_puts(" pid=");
+        serial_put_u32(p ? p->pid : 0);
+        serial_puts("\n");
+        
+        // Check periodically if quantum expired and yield
+        for (volatile uint32_t j = 0; j < 30000000; j++) {
+            if ((j % 10000000) == 0 && scheduler_should_switch()) {
+                process_yield();
             }
-            msg[10] = '\0';
-
-            serial_puts("[p3] pid=");
-            serial_put_u32(p ? p->pid : 0);
-            serial_puts(" i=");
-            serial_put_u32(i);
-            serial_puts(" msg=");
-            serial_puts(msg);
-            serial_puts("\n");
         }
     }
 }
 
+static void proc_p4(void* arg) {
+    (void)arg;
+    process_t* p = process_current();
+
+    for (uint32_t i = 0; i < 10; i++) {
+        serial_puts("[p4] msg=");
+        serial_put_u32(i);
+        serial_puts(" pid=");
+        serial_put_u32(p ? p->pid : 0);
+        serial_puts("\n");
+        
+        // Check periodically if quantum expired and yield
+        for (volatile uint32_t j = 0; j < 40000000; j++) {
+            if ((j % 10000000) == 0 && scheduler_should_switch()) {
+                process_yield();
+            }
+        }
+    }
+}
+
+static void proc_p5(void* arg) {
+    (void)arg;
+    process_t* p = process_current();
+
+    for (uint32_t i = 0; i < 10; i++) {
+        serial_puts("[p5] msg=");
+        serial_put_u32(i);
+        serial_puts(" pid=");
+        serial_put_u32(p ? p->pid : 0);
+        serial_puts("\n");
+        
+        // Check periodically if quantum expired and yield
+        for (volatile uint32_t j = 0; j < 50000000; j++) {
+            if ((j % 10000000) == 0 && scheduler_should_switch()) {
+                process_yield();
+            }
+        }
+    }
+}
+
+// Commands
 static void cmd_ps(void) {
     serial_puts("PID\tSTATE\t\tNAME\n");
     for (uint32_t i = 0; i < process_capacity(); i++) {
@@ -227,34 +179,6 @@ static void cmd_ps(void) {
     }
 }
 
-static void cmd_spawn(uint32_t n) {
-    if (n == 0) {
-        serial_puts("spawn: provide N > 0\n");
-        return;
-    }
-
-    uint32_t created = 0;
-    for (uint32_t i = 0; i < n; i++) {
-        int32_t pid = process_create("dummy", dummy_process, "dummy", 0);
-        if (pid < 0) {
-            serial_puts("spawn: failed at i=");
-            serial_put_u32(i);
-            serial_puts(" err=");
-            serial_put_u32((uint32_t)(-pid));
-            serial_puts("\n");
-            break;
-        }
-        created++;
-        serial_puts("spawned pid=");
-        serial_put_u32((uint32_t)pid);
-        serial_puts("\n");
-    }
-
-    serial_puts("spawn: created ");
-    serial_put_u32(created);
-    serial_puts(" process(es)\n");
-}
-
 static void cmd_kill(uint32_t pid) {
     int32_t rc = process_terminate(pid, 0);
     if (rc < 0) {
@@ -266,6 +190,32 @@ static void cmd_kill(uint32_t pid) {
     serial_puts("\n");
 }
 
+static void cmd_ready(uint32_t pid) {
+    process_t* p = process_get(pid);
+    if (!p) {
+        serial_puts("ready: no such pid\n");
+        return;
+    }
+
+    if (p->state == PROCESS_STATE_TERMINATED) {
+        // Restart terminated process
+        int32_t rc = process_restart(pid);
+        if (rc < 0) {
+            serial_puts("ready: failed to restart\n");
+            return;
+        }
+        serial_puts("ready: restarted pid=");
+        serial_put_u32(pid);
+        serial_puts("\n");
+    } else if (p->state == PROCESS_STATE_READY) {
+        serial_puts("ready: pid=");
+        serial_put_u32(pid);
+        serial_puts(" already ready\n");
+    } else {
+        serial_puts("ready: cannot ready non-terminated process\n");
+    }
+}
+
 static void cmd_run(uint32_t pid) {
     process_t* p = process_get(pid);
     if (!p) {
@@ -275,6 +225,16 @@ static void cmd_run(uint32_t pid) {
     if (!p->entry) {
         serial_puts("run: no entry function\n");
         return;
+    }
+
+    // If process is terminated, restart it
+    if (p->state == PROCESS_STATE_TERMINATED) {
+        int32_t rc = process_restart(pid);
+        if (rc < 0) {
+            serial_puts("run: failed to restart process\n");
+            return;
+        }
+        serial_puts("run: restarted terminated process\n");
     }
 
     int32_t rc = process_set_current(pid);
@@ -296,31 +256,34 @@ static void cmd_run(uint32_t pid) {
 }
 
 static void cmd_runq(void) {
-    uint32_t ran = 0;
-    while (1) {
-        uint32_t pid = 0;
-        int32_t rc = process_readyq_dequeue(&pid);
-        if (rc < 0) {
-            break;
-        }
-
-        process_t* p = process_get(pid);
-        if (!p || !p->entry) {
-            continue;
-        }
-
-        // Simulated "dispatch": RUNNING -> call entry -> TERMINATED
-        if (process_set_current(pid) < 0) {
-            continue;
-        }
-        p->entry(p->arg);
-        process_terminate(pid, 0);
-        ran++;
+    // Get the first ready process and start it
+    // Timer interrupts will preemptively switch between processes
+    uint32_t pid = 0;
+    int32_t rc = process_readyq_dequeue(&pid);
+    
+    if (rc < 0) {
+        serial_puts("runq: no ready processes\n");
+        return;
     }
-
-    serial_puts("runq: executed ");
-    serial_put_u32(ran);
-    serial_puts(" process(es)\n");
+    
+    // Re-enqueue for round-robin
+    process_readyq_enqueue(pid);
+    
+    serial_puts("runq: starting timer-assisted cooperative scheduling with pid=");
+    serial_put_u32(pid);
+    serial_puts("\n");
+    
+    // Enable interrupts to allow timer preemption
+    enable_interrupts();
+    
+    // Start the first process - timer will preempt and switch between them
+    int32_t next_pid = scheduler_context_switch();
+    
+    serial_puts("runq: returned from scheduler, next_pid=");
+    serial_put_u32((uint32_t)next_pid);
+    serial_puts("\n");
+    serial_puts("runq: all processes completed\n");
+    (void)next_pid;
 }
 
 void kmain(void) {
@@ -330,59 +293,19 @@ void kmain(void) {
     /* Initialize hardware */
     serial_init();
 
-    /* Initialize memory manager (heap + stack) */
+    /* Initialize subsystems */
     memory_init((uint32_t)&__kernel_end);
-    serial_puts("Memory manager initialized\n\n");
-
-    /* Initialize process manager */
     process_init();
-    serial_puts("Process manager initialized\n\n");
+    scheduler_init(SCHEDULER_DEFAULT_QUANTUM);
+    interrupt_init();
+    timer_init(100);  // 100 Hz = 10ms per tick
 
-    // Hardcoded ready processes for quick testing
+    /* Create ready processes */
     process_create("p1", proc_p1, NULL, 0);
     process_create("p2", proc_p2, NULL, 0);
     process_create("p3", proc_p3, NULL, 0);
-
-    /* ================= HEAP TESTS ================= */
-    serial_puts("=== HEAP TESTS ===\n");
-
-    char* h1 = (char*)kmalloc(16);
-    strcpy(h1, "Heap1");
-    serial_puts("Allocated h1: "); serial_puts(h1); serial_puts("\n");
-
-    char* h2 = (char*)kmalloc(32);
-    strcpy(h2, "Heap2");
-    serial_puts("Allocated h2: "); serial_puts(h2); serial_puts("\n");
-
-    kfree(h1); // Free first block
-    serial_puts("Freed h1\n");
-
-    char* h3 = (char*)kmalloc(8); // Should reuse h1 space if merged/split
-    strcpy(h3, "H3");
-    serial_puts("Allocated h3 after free: "); serial_puts(h3); serial_puts("\n");
-
-    kfree(h2);
-    kfree(h3);
-    serial_puts("Freed h2 and h3\n");
-
-    /* ================= STACK TESTS ================= */
-    serial_puts("\n=== STACK TESTS ===\n");
-
-    char* s1 = (char*)kalloc_stack(1024);
-    strcpy(s1, "Stack1");
-    serial_puts("Allocated s1: "); serial_puts(s1); serial_puts("\n");
-
-    char* s2 = (char*)kalloc_stack(512);
-    strcpy(s2, "Stack2");
-    serial_puts("Allocated s2: "); serial_puts(s2); serial_puts("\n");
-
-    kfree_stack(s2); // Free last stack first
-    serial_puts("Freed s2\n");
-
-    kfree_stack(s1); // Free first stack
-    serial_puts("Freed s1\n");
-
-    serial_puts("\nAll memory tests completed successfully!\n\n");
+    process_create("p4", proc_p4, NULL, 0);
+    process_create("p5", proc_p5, NULL, 0);
 
     /* ================= WELCOME MESSAGE ================= */
     serial_puts("========================================\n");
@@ -390,7 +313,7 @@ void kmain(void) {
     serial_puts("========================================\n");
     serial_puts("Hello from kacchiOS!\n");
     serial_puts("Running null process...\n\n");
-    serial_puts("Commands: ps | spawn N | run PID | runq | kill PID\n\n");
+    serial_puts("Commands: ps | ready PID | run PID | runq | kill PID\n\n");
 
     /* Main loop - the "null process" */
     while (1) {
@@ -417,13 +340,13 @@ void kmain(void) {
         if (pos > 0) {
             if (strcmp(input, "ps") == 0) {
                 cmd_ps();
-            } else if (starts_with(input, "spawn ")) {
+            } else if (starts_with(input, "ready ")) {
                 uint32_t ok = 0;
-                uint32_t n = parse_u32(input + 6, &ok);
+                uint32_t pid = parse_u32(input + 6, &ok);
                 if (!ok) {
-                    serial_puts("usage: spawn N\n");
+                    serial_puts("usage: ready PID\n");
                 } else {
-                    cmd_spawn(n);
+                    cmd_ready(pid);
                 }
             } else if (starts_with(input, "run ")) {
                 uint32_t ok = 0;
@@ -444,7 +367,7 @@ void kmain(void) {
             } else if (strcmp(input, "runq") == 0) {
                 cmd_runq();
             } else {
-                serial_puts("Unknown command. Try: ps | spawn N | run PID | runq | kill PID\n");
+                serial_puts("Unknown command. Try: ps | ready PID | run PID | runq | kill PID\n");
             }
         }
     }

@@ -5,12 +5,12 @@ CC = $(CROSS)gcc
 LD = $(CROSS)ld
 AS = $(CROSS)as
 
-CFLAGS = -m32 -ffreestanding -O2 -Wall -Wextra -nostdinc \
+CFLAGS = -m32 -ffreestanding -O0 -g -Wall -Wextra -nostdinc \
          -fno-builtin -fno-stack-protector -I.
 ASFLAGS = --32
 LDFLAGS = -m elf_i386
 
-SRC_OBJS = boot.o kernel.o serial.o string.o src/memory.o src/process.o
+SRC_OBJS = boot.o context.o isr.o interrupt.o kernel.o serial.o string.o src/memory.o src/process.o src/scheduler.o
 OBJS = $(addprefix $(BUILD_DIR)/, $(SRC_OBJS))
 
 all: $(BUILD_DIR)/kernel.elf
