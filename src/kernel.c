@@ -3,9 +3,9 @@
 #include "serial.h"
 #include "string.h"
 #include "interrupt.h"
-#include "src/memory.h"
-#include "src/process.h"
-#include "src/scheduler.h"
+#include "memory.h"
+#include "process.h"
+#include "scheduler.h"
 
 #define MAX_INPUT 128
 

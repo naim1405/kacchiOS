@@ -6,11 +6,11 @@ LD = $(CROSS)ld
 AS = $(CROSS)as
 
 CFLAGS = -m32 -ffreestanding -O0 -g -Wall -Wextra -nostdinc \
-         -fno-builtin -fno-stack-protector -I.
+         -fno-builtin -fno-stack-protector -Isrc
 ASFLAGS = --32
 LDFLAGS = -m elf_i386
 
-SRC_OBJS = boot.o context.o isr.o interrupt.o kernel.o serial.o string.o src/memory.o src/process.o src/scheduler.o
+SRC_OBJS = boot.o context.o isr.o interrupt.o kernel.o serial.o string.o memory.o process.o scheduler.o
 OBJS = $(addprefix $(BUILD_DIR)/, $(SRC_OBJS))
 
 all: $(BUILD_DIR)/kernel.elf
@@ -20,17 +20,14 @@ objs: $(OBJS)
 $(BUILD_DIR)/kernel.elf: $(OBJS) | $(BUILD_DIR)
 	$(LD) $(LDFLAGS) -T link.ld -o $@ $^
 
-$(BUILD_DIR)/%.o: %.c | $(BUILD_DIR) $(BUILD_DIR)/src
+$(BUILD_DIR)/%.o: src/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/%.o: %.S | $(BUILD_DIR)
+$(BUILD_DIR)/%.o: src/%.S | $(BUILD_DIR)
 	$(AS) $(ASFLAGS) $< -o $@
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
-
-$(BUILD_DIR)/src:
-	mkdir -p $(BUILD_DIR)/src
 
 run: $(BUILD_DIR)/kernel.elf
 	qemu-system-i386 -kernel $(BUILD_DIR)/kernel.elf -m 64M -serial stdio -display none

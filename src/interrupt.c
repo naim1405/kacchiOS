@@ -1,6 +1,6 @@
 #include "interrupt.h"
 #include "serial.h"
-#include "src/scheduler.h"
+#include "scheduler.h"
 
 #define IDT_ENTRIES 256
 #define PIT_FREQUENCY 1193182  // PIT base frequency in Hz
