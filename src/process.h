@@ -21,13 +21,12 @@ typedef enum {
 
 typedef void (*process_entry_t)(void* arg);
 
-// CPU context for context switching (i386 registers)
 typedef struct {
     uint32_t edi;
     uint32_t esi;
     uint32_t ebx;
     uint32_t ebp;
-    uint32_t eip;  // Return address (where to resume)
+    uint32_t eip;
 } cpu_context_t;
 
 typedef struct ipc_message {
@@ -40,22 +39,14 @@ typedef struct process {
     uint8_t used;
     uint32_t pid;
     process_state_t state;
-
     char name[PROCESS_NAME_MAX];
-
     process_entry_t entry;
     void* arg;
-
     void* stack_base;
     uint32_t stack_size;
     void* stack_top;
-
-    // CPU context for context switching - this is the stack pointer
-    void* context;  // Saved stack pointer (ESP)
-
+    void* context;
     int32_t exit_code;
-
-    // Simple mailbox IPC (fixed-size ring buffer)
     ipc_message_t mailbox[IPC_MAILBOX_CAPACITY];
     uint32_t mailbox_head;
     uint32_t mailbox_tail;
@@ -64,41 +55,30 @@ typedef struct process {
 
 void process_init(void);
 
-// Returns PID on success, negative error code on failure.
 int32_t process_create(const char* name, process_entry_t entry, void* arg, uint32_t stack_size);
 
-// Returns 0 on success, negative error code on failure.
 int32_t process_set_state(uint32_t pid, process_state_t new_state);
 int32_t process_set_current(uint32_t pid);
 int32_t process_terminate(uint32_t pid, int32_t exit_code);
-int32_t process_restart(uint32_t pid);  // Restart a terminated process
+int32_t process_restart(uint32_t pid);
 
 process_t* process_get(uint32_t pid);
 process_t* process_current(void);
 
-// Process table enumeration helpers
 uint32_t process_capacity(void);
 process_t* process_at(uint32_t index);
 
 uint32_t process_count(void);
 const char* process_state_str(process_state_t state);
 
-// Cooperative yielding for multitasking
 void process_yield(void);
 
-// Ready queue (FIFO of PIDs)
-// Enqueue is typically done automatically by process_create().
 int32_t process_readyq_enqueue(uint32_t pid);
 int32_t process_readyq_dequeue(uint32_t* out_pid);
 uint32_t process_readyq_count(void);
 void process_readyq_clear(void);
 
-// IPC
-// Returns 0 on success, negative error code on failure.
 int32_t ipc_send(uint32_t to_pid, const void* data, uint32_t length);
-
-// Attempts to receive into *out. If the mailbox is empty, returns a negative
-// error and moves the target process into PROCESS_STATE_WAITING_IPC.
 int32_t ipc_receive(uint32_t pid, ipc_message_t* out);
 
 static inline int32_t ipc_receive_current(ipc_message_t* out) {

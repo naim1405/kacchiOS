@@ -9,7 +9,7 @@ typedef struct block {
 static block_t* heap_head = NULL;
 static uint32_t heap_end;
 
-#define HEAP_MAX_SIZE 0x100000  // 1MB heap for demo
+#define HEAP_MAX_SIZE 0x100000
 
 void memory_init(uint32_t heap_start) {
     heap_head = (block_t*)heap_start;
@@ -19,7 +19,6 @@ void memory_init(uint32_t heap_start) {
     heap_end = heap_start + HEAP_MAX_SIZE;
 }
 
-// Split a block if it is larger than needed
 static void split_block(block_t* block, uint32_t size) {
     if (block->size > size + sizeof(block_t)) {
         block_t* new_block = (block_t*)((uint32_t)block + sizeof(block_t) + size);
@@ -41,10 +40,9 @@ void* kmalloc(uint32_t size) {
         }
         curr = curr->next;
     }
-    return NULL; // Out of memory
+    return NULL;
 }
 
-// Merge adjacent free blocks
 static void merge_blocks() {
     block_t* curr = heap_head;
     while (curr && curr->next) {
@@ -64,9 +62,8 @@ void kfree(void* ptr) {
     merge_blocks();
 }
 
-// Stack allocation (grow downward)
-#define STACK_MAX_SIZE 0x4000 // 16KB per stack
-static uint32_t stack_top = 0x200000; // Example: start stacks at 2MB
+#define STACK_MAX_SIZE 0x4000
+static uint32_t stack_top = 0x200000;
 
 void* kalloc_stack(uint32_t size) {
     if (size > STACK_MAX_SIZE) return NULL;
@@ -75,7 +72,5 @@ void* kalloc_stack(uint32_t size) {
 }
 
 void kfree_stack(void* ptr) {
-    // Optional: simple stack free (not fully dynamic)
     stack_top = (uint32_t)ptr;
 }
-
